@@ -83,6 +83,7 @@ create_parse_function <- function(feature_names, feature_shapes, feature_types) 
     purrr::set_names(feature_names)
 
   function(example_proto) {
+    force(example_proto)
     tf$parse_single_example(
       serialized = example_proto,
       features = features)
