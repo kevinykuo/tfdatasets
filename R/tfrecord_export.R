@@ -26,23 +26,6 @@ make_example <- function(l, feature_makers) {
 }
 
 write_tfrecord <- function(data, path) {
-
-  feature_names <- names(data)
-
-  # TODO consider putting this log in the walk() block so we visit the rows once
-  variable_lengths <- data %>%
-    purrr::keep(is_bare_list) %>%
-    purrr::map(~ purrr::map_int(.x, length) %>%
-          unique()
-    ) %>%
-    purrr::map_int(~ (
-      if (rlang::is_scalar_integer(.x)) .x else NA_integer_
-    ))
-
-  # whether each feature has fixed or variable length
-  feature_shapes <- ifelse(feature_names %in% names(variable_lengths),
-                           variable_lengths, 1L)
-
   l <- purrr::transpose(data)
 
   # types of features, e.g. double, intger, character
@@ -58,9 +41,32 @@ write_tfrecord <- function(data, path) {
     writer$write(example$SerializeToString())
   })
   writer$close()
-  invisible(
-    create_parse_function(feature_names, feature_shapes, feature_types)
-    )
+  invisible(NULL)
+}
+
+generate_parser <- function(data) {
+  feature_names <- names(data)
+
+  variable_lengths <- data %>%
+    purrr::keep(is_bare_list) %>%
+    purrr::map(~ purrr::map_int(.x, length) %>%
+                 unique()
+    ) %>%
+    purrr::map_int(~ (
+      if (rlang::is_scalar_integer(.x)) .x else NA_integer_
+    ))
+
+  # whether each feature has fixed or variable length
+  feature_shapes <- ifelse(feature_names %in% names(variable_lengths),
+                           variable_lengths, 1L)
+
+  l <- purrr::transpose(data)
+
+  # types of features, e.g. double, intger, character
+  feature_types <- l[[1]] %>%
+    purrr::map_chr(purrr::compose(typeof, unlist))
+
+  create_parse_function(feature_names, feature_shapes, feature_types)
 }
 
 create_parse_function <- function(feature_names, feature_shapes, feature_types) {
