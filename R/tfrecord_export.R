@@ -26,18 +26,22 @@ make_example <- function(l, feature_makers) {
   tf$train$Example(features = make_features(l, feature_makers))
 }
 
+infer_feature_types <- function(l) {
+  purrr::map_chr(l, purrr::compose(typeof, unlist))
+}
+
 write_tfrecord <- function(data, path) {
-  l <- purrr::transpose(data)
+  zipped <- purrr::transpose(data)
 
   # types of features, e.g. double, intger, character
-  feature_types <- l[[1]] %>%
-    purrr::map_chr(purrr::compose(typeof, unlist))
+  feature_types <- zipped[[1]] %>%
+    infer_feature_types()
 
   feature_makers <- feature_types %>%
     map(create_make_feature)
 
   writer <- tf$python_io$TFRecordWriter(path)
-  purrr::walk(l, function(x) {
+  purrr::walk(zipped, function(x) {
     example <- make_example(x, feature_makers)
     writer$write(example$SerializeToString())
   })
@@ -61,11 +65,9 @@ generate_parser <- function(data) {
   feature_shapes <- ifelse(feature_names %in% names(variable_lengths),
                            variable_lengths, 1L)
 
-  l <- purrr::transpose(data)
-
   # types of features, e.g. double, intger, character
-  feature_types <- l[[1]] %>%
-    purrr::map_chr(purrr::compose(typeof, unlist))
+  feature_types <- purrr::transpose(data)[[1]] %>%
+    infer_feature_types()
 
   create_parse_function(feature_names, feature_shapes, feature_types)
 }
