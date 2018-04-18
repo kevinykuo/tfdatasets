@@ -9,6 +9,7 @@ create_make_feature <- function(type) {
     purrr::set_names(c("param", "constructor"))
 
   function(value) {
+    force(value)
     value_list <- do.call(tf_type$constructor, list(value = as.list(value)))
     do.call(tf$train$Feature,
             purrr::set_names(list(value_list), tf_type$param))
