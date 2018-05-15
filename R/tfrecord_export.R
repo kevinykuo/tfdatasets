@@ -26,29 +26,67 @@ make_example <- function(l, feature_makers) {
   tf$train$Example(features = make_features(l, feature_makers))
 }
 
+make_sequence_example <- function(
+  l, feature_makers, context_variables, sequence_variables) {
+  context_features <- make_features(
+    l[context_variables], feature_makers[context_variables])
+  sequence_features <- make_feature_lists(
+    l[sequence_variables], feature_makers[sequence_variables]
+  )
+  tf$train$SequenceExample(context = context_features,
+                           feature_lists = sequence_features)
+}
+
+make_feature_lists <- function(l, feature_makers) {
+  feature_lists <- purrr::map2(
+    l, feature_makers,
+    ~ tf$train$FeatureList(feature = lapply(.x, .y))
+  )
+  tf$train$FeatureLists(feature_list = feature_lists)
+}
+
 infer_feature_types <- function(l) {
   purrr::map_chr(l, purrr::compose(typeof, unlist))
 }
 
-write_tfrecord <- function(data, path) {
-  zipped <- purrr::transpose(data)
+#' @export
+write_tfrecord <- function(
+  data, path, record_type = c("Example", "SequenceExample")) {
 
-  # types of features, e.g. double, intger, character
+  record_type <- rlang::arg_match(record_type)
+  zipped <- purrr::transpose(data)
+  variable_names <- names(data)
+
+  # types of features, e.g. double, integer, character
   feature_types <- zipped[[1]] %>%
     infer_feature_types()
-
   feature_makers <- feature_types %>%
     map(create_make_feature)
 
   writer <- tf$python_io$TFRecordWriter(path)
-  purrr::walk(zipped, function(x) {
-    example <- make_example(x, feature_makers)
-    writer$write(example$SerializeToString())
-  })
+
+  if (identical(record_type, "SequenceExample")) {
+    sequence_variables <- zipped[[1]] %>%
+      purrr::map_lgl(rlang::is_list) %>%
+      `[`(variable_names, .)
+    context_variables <- setdiff(variable_names, sequence_variables)
+    purrr::walk(zipped, function(x) {
+      example <- make_sequence_example(
+        x, feature_makers, context_variables, sequence_variables)
+      writer$write(example$SerializeToString())
+    })
+  } else {
+    purrr::walk(zipped, function(x) {
+      example <- make_example(x, feature_makers)
+      writer$write(example$SerializeToString())
+    })
+  }
+
   writer$close()
   invisible(NULL)
 }
 
+#' @export
 generate_parser <- function(data) {
   feature_names <- names(data)
 
